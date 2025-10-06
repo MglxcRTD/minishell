@@ -1,6 +1,7 @@
 package main;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
@@ -16,17 +17,13 @@ public class Main {
 
 	public static void ejecutarComandosForeground(String lineacomando) {
 
-		if (lineacomando == null || lineacomando.trim().isEmpty()) {
-			System.err.println("Error: comando vacío o inválido.");
-			return;
-		}
-
 		try {
 
 			TLine linea = Tokenizer.tokenize(lineacomando);
 
 			if (linea == null || linea.getCommands() == null || linea.getCommands().isEmpty()) {
 				System.err.println("Error: comando vacío o inválido.");
+				return;
 			}
 
 			for (TCommand comando : linea.getCommands()) {
@@ -64,7 +61,8 @@ public class Main {
 
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
-					System.err.println("No se pudo imprimir el comando: " + String.join(" ", argumentos));
+					System.err.println("No se pudo imprimir el comando: "
+							+ String.join(" ", argumentos + " comprueba si esta bien escrito o si existe"));
 				}
 			}
 
@@ -77,17 +75,13 @@ public class Main {
 
 	public static void ejecutarComandosBackground(String lineaentrada) {
 
-		if (lineaentrada == null || lineaentrada.trim().isEmpty()) {
-			System.err.println("Error: comando vacío o inválido.");
-			return;
-		}
-
 		try {
 
 			TLine linea = Tokenizer.tokenize(lineaentrada);
 
 			if (linea == null || linea.getCommands() == null || linea.getCommands().isEmpty()) {
 				System.err.println("Error: comando vacío o inválido.");
+				return;
 			}
 
 			for (TCommand cmd : linea.getCommands()) {
@@ -112,7 +106,8 @@ public class Main {
 
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
-					System.err.println("No se pudo imprimir el comando: " + String.join(" ", argumentos));
+					System.err.println("No se pudo imprimir el comando: "
+							+ String.join(" ", argumentos + " comprueba si esta bien escrito o si existe"));
 				}
 			}
 
@@ -124,7 +119,59 @@ public class Main {
 	}
 
 	public static void ejecutarComandosConRedireccion(String comando) {
+		try {
+			TLine linea = Tokenizer.tokenize(comando);
 
+			if (linea == null || linea.getCommands() == null || linea.getCommands().isEmpty()) {
+				System.err.println("Error: comando vacío o inválido.");
+				return;
+			}
+
+			for (TCommand cmd : linea.getCommands()) {
+				List<String> argumentos = cmd.getArgv();
+				ProcessBuilder pb = new ProcessBuilder(argumentos);
+
+				if (linea.getRedirectInput() != null) {
+					pb.redirectInput(new File(linea.getRedirectInput()));
+				} else {
+					pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+				}
+
+				if (linea.getRedirectOutput() != null) {
+					File archivoSalida = new File(linea.getRedirectOutput());
+					if (linea.isAppendOutput()) {
+						pb.redirectOutput(ProcessBuilder.Redirect.appendTo(archivoSalida));
+					} else {
+						pb.redirectOutput(archivoSalida);
+					}
+				} else {
+					pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+				}
+
+				if (linea.getRedirectError() != null) {
+					File archivoErrores = new File(linea.getRedirectError());
+					if (linea.isAppendError()) {
+						pb.redirectError(ProcessBuilder.Redirect.appendTo(archivoErrores));
+					} else {
+						pb.redirectError(archivoErrores);
+					}
+				} else {
+					pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+				}
+
+				try {
+					Process p = pb.start();
+					p.waitFor();
+				} catch (IOException e) {
+					System.err.println("No se pudo ejecutar el comando: " + String.join(" ", argumentos));
+				} catch (InterruptedException e) {
+					System.err.println("Ejecución interrumpida: " + e.getMessage());
+				}
+			}
+
+		} catch (MissingFileException e) {
+			System.err.println(e.getMessage());
+		}
 	}
 
 	public static String clasificarComandos(String comando) {
@@ -167,12 +214,16 @@ public class Main {
 			switch (clasificarComandos(comando)) {
 			case ("PIPE"):
 				System.out.println("Me falta hacer pipes");
+				break;
 			case ("BACKGROUND"):
 				ejecutarComandosBackground(comando);
+				break;
 			case ("REDIRECCION"):
-				System.out.println("Me falta redireccion");
+				ejecutarComandosConRedireccion(comando);
+				break;
 			case ("FOREGROUND"):
 				ejecutarComandosForeground(comando);
+				break;
 			}
 		}
 	}
