@@ -32,19 +32,6 @@ public class Main {
 				pb.inheritIO();
 				try {
 					Process p = pb.start();
-					try (BufferedReader salida = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-						String lineasalida;
-						while ((lineasalida = salida.readLine()) != null) {
-							System.out.println(lineasalida);
-						}
-					}
-
-					try (BufferedReader errores = new BufferedReader(new InputStreamReader(p.getErrorStream()))) {
-						String lineaerrores;
-						while ((lineaerrores = errores.readLine()) != null) {
-							System.err.println(lineaerrores);
-						}
-					}
 
 					try {
 						int codigosalida = p.waitFor();
@@ -90,19 +77,7 @@ public class Main {
 				pb.inheritIO();
 				try {
 					Process p = pb.start();
-					try (BufferedReader salida = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-						String lineasalida;
-						while ((lineasalida = salida.readLine()) != null) {
-							System.out.println(lineasalida);
-						}
-					}
-
-					try (BufferedReader errores = new BufferedReader(new InputStreamReader(p.getErrorStream()))) {
-						String lineaerrores;
-						while ((lineaerrores = errores.readLine()) != null) {
-							System.err.println(lineaerrores);
-						}
-					}
+					System.out.println("[ " + p.pid() + " ]");
 
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
@@ -130,6 +105,8 @@ public class Main {
 			for (TCommand cmd : linea.getCommands()) {
 				List<String> argumentos = cmd.getArgv();
 				ProcessBuilder pb = new ProcessBuilder(argumentos);
+				
+				// Entrada estandar "<"
 
 				if (linea.getRedirectInput() != null) {
 					pb.redirectInput(new File(linea.getRedirectInput()));
@@ -137,6 +114,8 @@ public class Main {
 					pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
 				}
 
+				// salida estandar ">, >>"
+				
 				if (linea.getRedirectOutput() != null) {
 					File archivoSalida = new File(linea.getRedirectOutput());
 					if (linea.isAppendOutput()) {
@@ -147,6 +126,8 @@ public class Main {
 				} else {
 					pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
 				}
+				
+				//salida de error "2>, 2>>"
 
 				if (linea.getRedirectError() != null) {
 					File archivoErrores = new File(linea.getRedirectError());
