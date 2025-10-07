@@ -105,17 +105,15 @@ public class Main {
 			for (TCommand cmd : linea.getCommands()) {
 				List<String> argumentos = cmd.getArgv();
 				ProcessBuilder pb = new ProcessBuilder(argumentos);
-				
+
 				// Entrada estandar "<"
 
 				if (linea.getRedirectInput() != null) {
 					pb.redirectInput(new File(linea.getRedirectInput()));
-				} else {
-					pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
 				}
 
 				// salida estandar ">, >>"
-				
+
 				if (linea.getRedirectOutput() != null) {
 					File archivoSalida = new File(linea.getRedirectOutput());
 					if (linea.isAppendOutput()) {
@@ -123,11 +121,9 @@ public class Main {
 					} else {
 						pb.redirectOutput(archivoSalida);
 					}
-				} else {
-					pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
 				}
-				
-				//salida de error "2>, 2>>"
+
+				// salida de error "2>, 2>>"
 
 				if (linea.getRedirectError() != null) {
 					File archivoErrores = new File(linea.getRedirectError());
@@ -136,8 +132,6 @@ public class Main {
 					} else {
 						pb.redirectError(archivoErrores);
 					}
-				} else {
-					pb.redirectError(ProcessBuilder.Redirect.INHERIT);
 				}
 
 				try {
@@ -152,6 +146,18 @@ public class Main {
 
 		} catch (MissingFileException e) {
 			System.err.println(e.getMessage());
+		}
+	}
+	
+	public static void ejecutarConPipes(String comando) {
+		try {
+			TLine linea = Tokenizer.tokenize(comando);
+			for(TCommand cmd : linea.getCommands()) {
+				List<String> argumentos = cmd.getArgv();
+			}
+		} catch (MissingFileException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 
