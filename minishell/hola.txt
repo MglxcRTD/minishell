@@ -1,0 +1,4 @@
+-rw-rw-r-- 1 miguel miguel    0 oct 12 18:53 lista_archivos.txt
+-rw-rw-r-- 1 miguel miguel   76 oct 12 18:53 error.txt
+-rw-rw-r-- 1 miguel miguel  233 oct 12 19:23 hola.txt
+-rw-rw-r-- 1 miguel miguel 3654 oct 12 19:07 lista_conf.txt
