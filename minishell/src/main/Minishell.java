@@ -31,15 +31,7 @@ public class Minishell {
 
 		String currentdir = System.getProperty("user.dir");
 
-		/*
-		 * Aquí validamos que si el comando termina en "&" la variable devuelva true.
-		 * Además quitamos los espacios con trim por si llegaran a dar algún tipo de
-		 * error.
-		 */
-		if (lineaComando.trim().endsWith("&")) {
-			background = true;
-		}
-
+	
 		/*
 		 * Lo primero que hacemos aqui es crear un objeto TLlinea que "tokenice" los
 		 * comandos u argumentos a traves de la clase Tokenize. Además tambien
@@ -70,12 +62,12 @@ public class Minishell {
 			 */
 
 			if (comandos.size() > 1) {
-				ejecutarPipes(linea, background, currentdir);
+				ejecutarPipes(linea, linea.isBackground(), currentdir);
 			} else {
 				if (comandos.get(0).getFilename().equals("cd")) {
 					ejecutarcd(linea, currentdir);
 				} else {
-					ejecutarComandoSimple(linea, background, currentdir);
+					ejecutarComandoSimple(linea, linea.isBackground(), currentdir);
 				}
 			}
 
@@ -221,59 +213,65 @@ public class Minishell {
 		pb.directory(new File(currentdir));
 
 		/*
-		 * Con el inherit.IO Estamos cogiendo la entrada y salida del proceso padre en
-		 * este caso del main de java.
-		 */
-
-		pb.inheritIO();
-
-		/*
 		 * En el caso de que hubiera redirecciones como: "<, >, >>, 2>, 2>>" las
 		 * aplicamos.
 		 */
 
 		aplicarRedirecciones(pb, linea);
 
+		/*
+		 * Inicializamos el proceso, comprobamos si es background o foreground, en el
+		 * caso de que sea background, lo ejecutamos y sacamos la PID por la minishell.
+		 */
+
+		Process p;
 		try {
+			p = pb.start();
+			try (BufferedReader salida = new BufferedReader(new InputStreamReader(p.getInputStream()));
+					BufferedReader errores = new BufferedReader(new InputStreamReader(p.getErrorStream()))) {
 
-			/*
-			 * Inicializamos el proceso, comprobamos si es background o foreground, en el
-			 * caso de que sea background, lo ejecutamos y sacamos la PID por la minishell.
-			 */
-
-			Process p = pb.start();
-
-			if (background) {
-				System.out.println("[Proceso en background: PID " + p.pid() + "]");
-			} else {
-
-				/*
-				 * En el caso de que el comando se ejecute en foreground inicializamos el
-				 * waitfor para que antes de seguir metiendo comandos esperemos a que este
-				 * proceso se ejecute. En caso de que no haya problemas y el codigo sea 0 saldrá
-				 * el mensaje de proceso terminado adecuadamente, sino saldrá el codigo de
-				 * error.
-				 */
-
-				int codigo = p.waitFor();
-				if (codigo != 0) {
-					System.err.println("El proceso terminó con error: " + codigo);
-				} else {
-					System.out.println("proceso terminado correctamente con codigo: " + codigo);
+				String lineaSalida;
+				try {
+					while ((lineaSalida = salida.readLine()) != null) {
+						System.out.println(lineaSalida);
+					}
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
 				}
+
+				String lineaError;
+				try {
+					while ((lineaError = errores.readLine()) != null) {
+						System.err.println(lineaError);
+					}
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+				if (!background) {
+					int codigo = p.waitFor();
+					if (codigo != 0) {
+						System.err.println("El proceso terminó con error: " + codigo);
+					} else {
+						System.out.println("Proceso terminado correctamente con código: " + codigo);
+					}
+				} else {
+					System.out.println("[Proceso en background: PID " + p.pid() + "]");
+				}
+
+			} catch (InterruptedException e) {
+				System.err.println("Ejecución interrumpida: " + e.getMessage());
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
 			}
-
-			/*
-			 * En estos catch de aqui estamos capturando si en algún momento la ejecucion ha
-			 * sido interrumpida o si ha ocurrido algun error durante la ejecución del
-			 * proceso.
-			 */
-
 		} catch (IOException e) {
-			System.err.println("Error ejecutando comando: " + e.getMessage());
-		} catch (InterruptedException e) {
-			System.err.println("Ejecución interrumpida: " + e.getMessage());
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
+
 	}
 
 	/*
@@ -330,24 +328,39 @@ public class Minishell {
 	 * Método para cambiar el directorio
 	 */
 
-	public static void ejecutarcd(TLine linea, String currentcd) {
+	public static String ejecutarcd(TLine linea, String currentdir) {
+	    TCommand cmd = linea.getCommands().get(0);
+	    List<String> args = cmd.getArgv();
 
-		File directorioactual = new File(currentcd);
-		TCommand cmd = linea.getCommands().get(0);
-		String directorionuevo = "";
-		
-			for (int i = 1; i < cmd.getArgv().size(); i++) {
-				directorionuevo += cmd.getArgv().get(i);
-				
-			}
-			
-			File cambiotruco = new File(directorionuevo);
-			System.out.println(cambiotruco.getAbsolutePath());
-			
-			
-		
+	    // Si no hay argumento, ir al HOME
+	    if (args.size() == 1) {
+	        String home = System.getProperty("user.home");
+	        System.setProperty("user.dir", home);
+	        System.out.println("Directorio cambiado a: " + home);
+	        return home;
+	    }
 
-}
+	    // Tomar el argumento como destino
+	    String destino = args.get(1);
+	    File nuevoDir = new File(destino);
+
+	    // Si es ruta relativa, convertir a absoluta desde currentdir
+	    if (!nuevoDir.isAbsolute()) {
+	        nuevoDir = new File(currentdir, destino);
+	    }
+
+	    // Validar existencia
+	    if (!nuevoDir.exists() || !nuevoDir.isDirectory()) {
+	        System.err.println("cd: no existe el directorio: " + destino);
+	        return currentdir;
+	    }
+
+	    // Cambiar el directorio actual
+	    System.setProperty("user.dir", nuevoDir.getAbsolutePath());
+	    System.out.println("Directorio cambiado a: " + nuevoDir.getAbsolutePath());
+	    return nuevoDir.getAbsolutePath();
+	}
+
 
 	public static void main(String[] args) {
 
