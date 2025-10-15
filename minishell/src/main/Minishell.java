@@ -17,21 +17,18 @@ import java.io.InputStreamReader;
 public class Minishell {
 
 	/*
+	 * Lo primero que vamos a hacer es declararnos una variable estática de nuestro
+	 * directorio actual para poder modificarlo mas adelante con el comando cd
+	 */
+
+	private static File currentDir = new File(System.getProperty("user.dir"));
+
+	/*
 	 * Creamos el metodo para ejecutar la linea de comandos que vayamos a recibir.
 	 */
 
 	public static void ejecutarLinea(String lineaComando) {
 
-		/*
-		 * Para poder ejecutar comandos en background vamos a crear una variable
-		 * booleana para comprobar si el comando termina en "&" o no.
-		 */
-
-		boolean background = false;
-
-		String currentdir = System.getProperty("user.dir");
-
-	
 		/*
 		 * Lo primero que hacemos aqui es crear un objeto TLlinea que "tokenice" los
 		 * comandos u argumentos a traves de la clase Tokenize. Además tambien
@@ -58,21 +55,23 @@ public class Minishell {
 
 			/*
 			 * Como bien hemos dicho antes, si la lista contiene mas de un comando significa
-			 * que si o si vamos a ejecutar una pipe, sino ejecutaremos un comando simple.
+			 * que si o si vamos a ejecutar una pipe, sino vamos a comprobar si el comando
+			 * empieza por cd, de ser así vamos a modificar nuestro directorio actual
+			 * ejecutando el comando cd, sino pues ejecutamos un comando simple
 			 */
 
 			if (comandos.size() > 1) {
-				ejecutarPipes(linea, linea.isBackground(), currentdir);
+				ejecutarPipes(linea, linea.isBackground(), currentDir);
 			} else {
 				if (comandos.get(0).getFilename().equals("cd")) {
-					ejecutarcd(linea, currentdir);
+					currentDir = ejecutarcd(linea, currentDir);
 				} else {
-					ejecutarComandoSimple(linea, linea.isBackground(), currentdir);
+					ejecutarComandoSimple(linea, linea.isBackground(), currentDir);
 				}
 			}
 
 		} catch (MissingFileException e) {
-			System.err.println(e.getMessage());
+			System.err.println("archivo no encontrado: " + e.getMessage());
 		}
 	}
 
@@ -82,7 +81,7 @@ public class Minishell {
 	 * ejecuten durante la pipe se ejecuta en background
 	 */
 
-	private static void ejecutarPipes(TLine linea, boolean background, String currentdir) {
+	private static void ejecutarPipes(TLine linea, boolean background, File currentdir) {
 
 		/*
 		 * Vamos a crear dos listas, uno que reciba todos los comandos que lleve la
@@ -101,7 +100,13 @@ public class Minishell {
 		for (int i = 0; i < comandos.size(); i++) {
 			TCommand cmd = comandos.get(i);
 			ProcessBuilder pb = new ProcessBuilder(cmd.getArgv());
-			pb.directory(new File(currentdir));
+			
+			/*
+			 Aqui recordamos al Processbuilder que queremos que ejecute el comando
+			 en nuestro directorio actual.
+			 */
+			
+			pb.directory(currentdir);
 
 			/*
 			 * Aqui estamos redirigiendo la salida el ultimo elemento de la pipe utilizando
@@ -197,7 +202,7 @@ public class Minishell {
 	 * en background
 	 */
 
-	private static void ejecutarComandoSimple(TLine linea, boolean background, String currentdir) {
+	private static void ejecutarComandoSimple(TLine linea, boolean background, File currentdir) {
 
 		/*
 		 * Lo primero que vamos a hacer es sacar el comando del objeto Tline, para ello
@@ -210,7 +215,7 @@ public class Minishell {
 
 		TCommand coman2 = linea.getCommands().getFirst();
 		ProcessBuilder pb = new ProcessBuilder(coman2.getArgv());
-		pb.directory(new File(currentdir));
+		pb.directory(currentdir);
 
 		/*
 		 * En el caso de que hubiera redirecciones como: "<, >, >>, 2>, 2>>" las
@@ -220,8 +225,8 @@ public class Minishell {
 		aplicarRedirecciones(pb, linea);
 
 		/*
-		 * Inicializamos el proceso, comprobamos si es background o foreground, en el
-		 * caso de que sea background, lo ejecutamos y sacamos la PID por la minishell.
+		 * Aquí al igual que hicimos en el metodo de las pipes, asignamos las salidas para que salgan
+		 * por consola.
 		 */
 
 		Process p;
@@ -249,6 +254,13 @@ public class Minishell {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
+				
+				/*
+				 Comprobamos si se va a ejecutar en background o no, en el caso
+				 de no ser asi hacemos un waitfor para que hasta que no se ejecute
+				 el proceso la minishell no ejecutará mas comandos, si es background si
+				 permite el ingreso de nuevos y ademas muestra el PID.
+				 */
 
 				if (!background) {
 					int codigo = p.waitFor();
@@ -265,11 +277,13 @@ public class Minishell {
 				System.err.println("Ejecución interrumpida: " + e.getMessage());
 			} catch (IOException e1) {
 				// TODO Auto-generated catch block
-				e1.printStackTrace();
+				System.err.println(
+						"Fallo al ejecutar el comando, comprueba si se ha ingresado bien o esta en el Sistema Operativo correcto");
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.err.println(
+					"Fallo al ejecutar el comando, comprueba si se ha ingresado bien o esta en el Sistema Operativo correcto");
 		}
 
 	}
@@ -284,22 +298,32 @@ public class Minishell {
 	private static void aplicarRedirecciones(ProcessBuilder pb, TLine linea) {
 
 		/*
-		 * Aqui estamos tratando el comando de entrada "<"
+		 * Aqui estamos tratando el comando de entrada "<" y en caso de que no exista 
+		 * lanzamos un mensaje de error.
 		 */
 
 		if (linea.getRedirectInput() != null) {
-			pb.redirectInput(new File(linea.getRedirectInput()));
+			File input = new File(linea.getRedirectInput());
+			if (!input.exists()) {
+				System.err.println("Archivo de entrada no encontrado");
+			} else {
+				pb.redirectInput(input);
+			}
+
 		}
 
 		/*
 		 * Aqui estamos tratando el comando de salida, primero comprobando que no sea
 		 * nulo. En el caso de que sea ">>" para no sobreescribir utilizaremos el
 		 * appendTo, en caso de que sea solo ">" utilizaremos unicamente el
-		 * redirectOutput
+		 * redirectOutput. En caso de que no exista lanzamos un mensaje de error.
 		 */
 
 		if (linea.getRedirectOutput() != null) {
 			File salida = new File(linea.getRedirectOutput());
+			if (!salida.exists()) {
+				System.err.println("Archivo de salida no encontrado");
+			}
 			if (linea.isAppendOutput()) {
 				pb.redirectOutput(ProcessBuilder.Redirect.appendTo(salida));
 			} else {
@@ -311,11 +335,15 @@ public class Minishell {
 		 * Aqui estamos tratando la salida de errores donde se nos escribirá en un
 		 * documento el por que esta fallando un proceso. En caso de que la salida sea
 		 * "2>>" para no sobreescribir el archivo usaremos el appendTo en el caso de que
-		 * sea "2>" utilizaremos redirectError simplemente.
+		 * sea "2>" utilizaremos redirectError simplemente. En caso de que no exista el archivo
+		 * lanzamos un mensaje de error.
 		 */
 
 		if (linea.getRedirectError() != null) {
 			File salida_errores = new File(linea.getRedirectError());
+			if(!salida_errores.exists()) {
+				System.err.println("Archivo de salida de errores no encontrado");
+			}
 			if (linea.isAppendError()) {
 				pb.redirectError(ProcessBuilder.Redirect.appendTo(salida_errores));
 			} else {
@@ -325,42 +353,65 @@ public class Minishell {
 	}
 
 	/*
-	 * Método para cambiar el directorio
+	 * Método para cambiar el directorio. Para ello necesitamos la linea del comando con
+	 * sus argumentos y nuestro directorio actual.
 	 */
 
-	public static String ejecutarcd(TLine linea, String currentdir) {
-	    TCommand cmd = linea.getCommands().get(0);
-	    List<String> args = cmd.getArgv();
+	public static File ejecutarcd(TLine linea, File currentDir) {
+		
+		/*
+		 Lo primero que vamos a hacer es separar el comando cd de la ruta a la que queremos
+		 cambiar que en este caso esta en los argumentos.
+		 */
+		
+		
+		TCommand cmd = linea.getCommands().get(0);
+		List<String> args = cmd.getArgv();
+		
+		/*
+		 Aqui vemos que si el unico argumento es el comando, es decir "cd" lo utilizaremos
+		 para volver al path home
+		 */
 
-	    // Si no hay argumento, ir al HOME
-	    if (args.size() == 1) {
-	        String home = System.getProperty("user.home");
-	        System.setProperty("user.dir", home);
-	        System.out.println("Directorio cambiado a: " + home);
-	        return home;
-	    }
+		if (args.size() == 1) {
+			File home = new File(System.getProperty("user.home"));
+			System.out.println("Directorio cambiado a: " + home.getAbsolutePath());
+			return home;
+		}
+		
+		/*
+		 Aqui estamos sacando el Path al que queremos cambiar el directorio
+		 */
 
-	    // Tomar el argumento como destino
-	    String destino = args.get(1);
-	    File nuevoDir = new File(destino);
+		File destino = new File(args.get(1));
+		
+		/*
+		 En el caso de que nuestra ruta sea relativa, vamos a coger nuestra direccion
+		 actual y la vamos a concatenar con la ruta relativa proporcionada
+		 */
+		
+		if (!destino.isAbsolute()) {
+			destino = new File(currentDir, args.get(1));
+		}
+		
+		/*
+		 En el caso de que el directorio no exista o no sera un directorio lanzamos 
+		 un mensaje de error y devolvemos nuestro directorio actual.
+		 */
 
-	    // Si es ruta relativa, convertir a absoluta desde currentdir
-	    if (!nuevoDir.isAbsolute()) {
-	        nuevoDir = new File(currentdir, destino);
-	    }
+		if (!destino.exists() || !destino.isDirectory()) {
+			System.err.println("cd: no existe el directorio: " + args.get(1));
+			return currentDir;
+		}
+		
+		/*
+		 En el caso de que todo haya ido bien lanzamos un mensaje para comprobar
+		 el exito de nuestro cambio de Directorio y devolvemos el nuevo directorio.
+		 */
 
-	    // Validar existencia
-	    if (!nuevoDir.exists() || !nuevoDir.isDirectory()) {
-	        System.err.println("cd: no existe el directorio: " + destino);
-	        return currentdir;
-	    }
-
-	    // Cambiar el directorio actual
-	    System.setProperty("user.dir", nuevoDir.getAbsolutePath());
-	    System.out.println("Directorio cambiado a: " + nuevoDir.getAbsolutePath());
-	    return nuevoDir.getAbsolutePath();
+		System.out.println("Directorio cambiado a: " + destino.getAbsolutePath());
+		return destino;
 	}
-
 
 	public static void main(String[] args) {
 
